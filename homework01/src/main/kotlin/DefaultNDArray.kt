@@ -1,6 +1,6 @@
 import java.lang.Integer.min
 
-interface NDArray: SizeAware, DimentionAware {
+interface NDArray : SizeAware, DimentionAware {
     /*
      * Получаем значение по индексу point
      *
@@ -86,11 +86,12 @@ interface NDArray: SizeAware, DimentionAware {
  */
 class DefaultNDArray private constructor(val data: IntArray, private val shape: Shape) : NDArray {
     companion object {
-        fun zeros(shape: Shape) : NDArray{
+        fun zeros(shape: Shape): NDArray {
             return DefaultNDArray(IntArray(shape.size), shape)
         }
-        fun ones(shape: Shape) : NDArray{
-            return DefaultNDArray(IntArray(shape.size) {1}, shape)
+
+        fun ones(shape: Shape): NDArray {
+            return DefaultNDArray(IntArray(shape.size) { 1 }, shape)
         }
     }
 
@@ -104,15 +105,15 @@ class DefaultNDArray private constructor(val data: IntArray, private val shape: 
     override val size: Int
         get() = data.size
 
-    fun getIndex(point: Point) : Int {
+    private fun getIndex(point: Point): Int {
         if (point.ndim != ndim) {
-            throw NDArrayException.IllegalPointDimensionException()
+            throw NDArrayException.IllegalPointDimensionException(point.ndim, ndim)
         }
         var index = 0
-        var currBlockSize : Int = size
+        var currBlockSize: Int = size
         for (i in 0 until point.ndim) {
             if (point.dim(i) < 0 || point.dim(i) >= shape.dim(i)) {
-                throw NDArrayException.IllegalPointCoordinateException();
+                throw NDArrayException.IllegalPointCoordinateException(point.dim(i), shape.dim(i));
             }
             currBlockSize /= shape.dim(i)
             index += point.dim(i) * currBlockSize
@@ -133,20 +134,20 @@ class DefaultNDArray private constructor(val data: IntArray, private val shape: 
     }
 
     override fun view(): NDArray {
-        return this
+        return ViewNDArray(this)
     }
 
-    fun addArray(other: NDArray, index1: Int, dims2: IntArray, blockSize1: Int, kdim: Int) {
+    private fun addArray(other: NDArray, startIndex: Int, otherDims: IntArray, blockSize: Int, kdim: Int) {
         if (kdim < ndim) {
-            val bs1 = blockSize1 / dim(kdim)
+            val newBlockSize = blockSize / dim(kdim)
             val minDim = if (kdim < other.ndim) min(dim(kdim), other.dim(kdim)) else dim(kdim)
-            for(i in 0 until minDim) {
-                val idx1 = index1 + i * bs1
-                if (kdim < other.ndim) dims2[kdim] = i
-                addArray(other, idx1, dims2.copyOf(), bs1, kdim + 1)
+            for (i in 0 until minDim) {
+                val newStartIndex = startIndex + i * newBlockSize
+                if (kdim < other.ndim) otherDims[kdim] = i
+                addArray(other, newStartIndex, otherDims.copyOf(), newBlockSize, kdim + 1)
             }
         } else {
-            data[index1] += other.at(DefaultPoint(*dims2))
+            data[startIndex] += other.at(DefaultPoint(*otherDims))
         }
     }
 
@@ -154,26 +155,44 @@ class DefaultNDArray private constructor(val data: IntArray, private val shape: 
         if (ndim == other.ndim || ndim == other.ndim + 1) {
             addArray(other, 0, IntArray(other.ndim), size, 0);
         } else {
-            throw NDArrayException.IllegalNDArrayDimensionException();
+            throw NDArrayException.IllegalNDArrayDimensionException(ndim, other.ndim, other.ndim + 1);
         }
     }
 
     override fun dot(other: NDArray): NDArray {
-        if (ndim != 2 || dim(1) != other.dim(0)) {
-            throw  NDArrayException.IllegalNDArrayDimensionException()
-        } else {
-            val res = zeros(if (other.ndim > 1) DefaultShape(dim(0), other.dim(1)) else DefaultShape(dim(0)))
-            for(i in 0 until dim(0)) {
-                for(j in 0 until other.dim(1)) {
+        if (ndim != 2) {
+            throw NDArrayException.IllegalNDArrayDimensionException(ndim, 2)
+        }
+        if (other.ndim > 2) {
+            throw NDArrayException.IllegalNDArrayDimensionException(other.ndim, 2)
+        }
+        if (dim(1) != other.dim(0)) {
+            throw NDArrayException.IllegalPointDimensionException(dim(1), other.dim(0))
+        }
+
+        val res: NDArray
+        if (other.ndim > 1) {
+            res = zeros(DefaultShape(dim(0), other.dim(1)))
+            for (i in 0 until dim(0)) {
+                for (j in 0 until other.dim(1)) {
                     var value = 0
-                    for(k in 0 until dim(1)) {
+                    for (k in 0 until dim(1)) {
                         value += this.at(DefaultPoint(i, k)) * other.at(DefaultPoint(k, j))
                     }
                     res.set(DefaultPoint(i, j), value)
                 }
             }
-            return res
+        } else {
+            res = zeros(DefaultShape(dim(0)))
+            for (i in 0 until dim(0)) {
+                var value = 0
+                for (k in 0 until dim(1)) {
+                    value += this.at(DefaultPoint(i, k)) * other.at(DefaultPoint(k))
+                }
+                res.set(DefaultPoint(i), value)
+            }
         }
+        return res
     }
 
     override fun toString(): String {
@@ -182,9 +201,51 @@ class DefaultNDArray private constructor(val data: IntArray, private val shape: 
 
 }
 
-sealed class NDArrayException : Exception() {
+internal class ViewNDArray(val source: NDArray) : NDArray {
+
+    override val size: Int
+        get() = source.size
+    override val ndim: Int
+        get() = source.ndim
+
+    override fun dim(i: Int): Int {
+        return source.dim(i)
+    }
+
+    override fun at(point: Point): Int {
+        return source.at(point)
+    }
+
+    override fun set(point: Point, value: Int) {
+        source.set(point, value)
+    }
+
+    override fun copy(): NDArray {
+        return source.copy();
+    }
+
+    override fun view(): NDArray {
+        return source.view()
+    }
+
+    override fun add(other: NDArray) {
+        source.add(other)
+    }
+
+    override fun dot(other: NDArray): NDArray {
+        return source.dot(other)
+    }
+
+}
+
+sealed class NDArrayException(reason: String = "") : Exception(reason) {
     /* TODO: реализовать требуемые исключения */
-    class IllegalPointCoordinateException : NDArrayException()
-    class IllegalPointDimensionException : NDArrayException()
-    class IllegalNDArrayDimensionException : NDArrayException()
+    class IllegalPointCoordinateException(current: Int, max: Int) :
+        NDArrayException("Illegal point dimension exception: current value: $current, expected value from range 0 to $max")
+
+    class IllegalPointDimensionException(current: Int, expected: Int) :
+        NDArrayException("Illegal point dimension exception: current value = $current, expected = $expected")
+
+    class IllegalNDArrayDimensionException(current: Int, vararg expected: Int) :
+        NDArrayException("Illegal NDArray dimension exception: current value = $current, expected value from ${expected.contentToString()}")
 }

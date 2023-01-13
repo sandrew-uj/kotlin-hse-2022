@@ -1,5 +1,4 @@
-
-interface Shape: DimentionAware, SizeAware
+interface Shape : DimentionAware, SizeAware
 
 /**
  * Реализация Point по умолчаению
@@ -14,7 +13,7 @@ interface Shape: DimentionAware, SizeAware
  *
  * Сама коллекция параметров недоступна, доступ - через методы интерфейса
  */
-class DefaultShape(private vararg val dimentions: Int): Shape {
+class DefaultShape(private vararg val dimentions: Int) : Shape {
 
     init {
         if (dimentions.isEmpty()) {
@@ -34,13 +33,14 @@ class DefaultShape(private vararg val dimentions: Int): Shape {
         return dimentions[i]
     }
 
-    override val size: Int
-        get() = dimentions.reduce { res, it -> res * it }
+    override val size: Int by lazy {
+        dimentions.reduce { res, it -> res * it }
+    }
 
 }
 
-sealed class ShapeArgumentException (reason: String = "") : IllegalArgumentException(reason) {
-    class EmptyShapeException: ShapeArgumentException("Empty shape exception")
+sealed class ShapeArgumentException(reason: String = "") : IllegalArgumentException(reason) {
+    class EmptyShapeException : ShapeArgumentException("Empty shape exception")
     class NonPositiveDimensionException(private val index: Int, private val value: Int) :
         ShapeArgumentException("Non-positive value: $value at index $index")
 }
