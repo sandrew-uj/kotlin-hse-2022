@@ -14,9 +14,10 @@ package binomial
  *  Исключение Array-параметр в функции flistOf. Но даже в ней нельзя использовать цикл и forEach.
  *  Только обращение по индексу
  */
-sealed class FList<T>: Iterable<T> {
+sealed class FList<T> : Iterable<T> {
     // размер списка, 0 для Nil, количество элементов в цепочке для Cons
     abstract val size: Int
+
     // пустой ли списк, true для Nil, false для Cons
     abstract val isEmpty: Boolean
 
@@ -74,7 +75,7 @@ sealed class FList<T>: Iterable<T> {
      *
      * Также для борьбы с бойлерплейтом были введены функция и свойство nil в компаньоне
      */
-    data class Nil<T>(private val dummy: Int=0) : FList<T>() {
+    data class Nil<T>(private val dummy: Int = 0) : FList<T>() {
         override val size: Int
             get() = 0
         override val isEmpty: Boolean
@@ -100,15 +101,28 @@ sealed class FList<T>: Iterable<T> {
             get() = false
 
         override fun <U> map(f: (T) -> U): FList<U> {
-            return Cons(f(head), tail.map(f))
+            tailrec fun mapRec(fList: FList<U>, it: Iterator<T>): FList<U> {
+                return if (!it.hasNext()) fList
+                else mapRec(Cons(f(it.next()), fList), it)
+            }
+            return mapRec(nil(), iterator()).reverse()
         }
 
         override fun filter(f: (T) -> Boolean): FList<T> {
-            return if (f(head)) Cons(head, tail.filter(f)) else tail.filter(f)
+            tailrec fun filterRec(fList: FList<T>, it: Iterator<T>): FList<T> {
+                return if (!it.hasNext()) fList
+                else {
+                    val tempHead = it.next()
+                    if (f(tempHead)) filterRec(Cons(tempHead, fList), it) else filterRec(fList, it)
+                }
+            }
+            return filterRec(nil(), iterator()).reverse()
         }
 
         override fun <U> fold(base: U, f: (U, T) -> U): U {
-            return tail.fold(f(base, head), f)
+            tailrec fun foldRec(acc: U, tail: Cons<T>): U =
+                if (tail.size == 1) f(acc, tail.head) else foldRec(f(acc, tail.head), tail.tail as Cons<T>)
+            return foldRec(base, this)
         }
     }
 
@@ -121,6 +135,9 @@ sealed class FList<T>: Iterable<T> {
 // конструирование функционального списка в порядке следования элементов
 // требуемая сложность - O(n)
 fun <T> flistOf(vararg values: T): FList<T> {
-    return if (values.isEmpty()) FList.nil()
-    else FList.Cons(values.first(), flistOf(*values.sliceArray(1 until values.size)))
+    tailrec fun <T> fListOfIdxRec(fList: FList<T>, idx: Int, vararg values: T): FList<T> {
+        return if (idx == values.size) fList
+        else fListOfIdxRec(FList.Cons(values[idx], fList), idx + 1, *values)
+    }
+    return fListOfIdxRec(FList.Nil(), 0, *values)
 }

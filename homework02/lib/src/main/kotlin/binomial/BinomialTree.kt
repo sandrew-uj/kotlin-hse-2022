@@ -24,10 +24,10 @@ interface SelfMergeable<T> {
  * Дерево совсем без элементов не предусмотрено
  */
 
-class BinomialTree<T: Comparable<T>> private constructor(val value: T, val children: FList<BinomialTree<T>>): SelfMergeable<BinomialTree<T>> {
+class BinomialTree<T : Comparable<T>> private constructor(val value: T, val children: FList<BinomialTree<T>>) :
+    SelfMergeable<BinomialTree<T>> {
     // порядок дерева
-    val order: Int = if (children.isEmpty) 0
-    else 1 + children.fold(0) { acc: Int, child: BinomialTree<T> -> max(acc, child.order) }
+    val order: Int = children.size
 
     /*
      * слияние деревьев
@@ -45,6 +45,6 @@ class BinomialTree<T: Comparable<T>> private constructor(val value: T, val child
     }
 
     companion object {
-        fun <T: Comparable<T>> single(value: T): BinomialTree<T> = BinomialTree(value, FList.nil())
+        fun <T : Comparable<T>> single(value: T): BinomialTree<T> = BinomialTree(value, FList.nil())
     }
 }
